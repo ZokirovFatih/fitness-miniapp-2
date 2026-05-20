@@ -462,10 +462,24 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
 
 <script>
 // ══════════════════════════════════════════════════
-// КОНФИГ — меняйте здесь название и контакты
-// Соответствует GymConfig.java в боте
+// КОНФИГ — загружается автоматически из GymConfig.java
+//
+// ⚠️ Укажите адрес вашего сервера ниже.
+//
+// Локально (для теста):    http://localhost:8080/config
+// На VPS/сервере:          http://ВАШ_IP:8080/config
+// Через ngrok:             https://xxxx.ngrok.io/config
+//
+// Когда меняете GymConfig.java → пересобираете бота →
+// Mini App автоматически показывает новые данные.
 // ══════════════════════════════════════════════════
-const CFG = {
+
+// ── Адрес сервера конфига ──────────────────────────
+const CONFIG_SERVER_URL = "http://localhost:8080/config";
+
+// ── Запасной конфиг (если сервер недоступен) ───────
+// Совпадает с GymConfig.java — меняйте оба вместе
+const CFG_DEFAULT = {
   name:     "FitLife Gym",
   tagline:  "Твой фитнес — твои правила",
   city:     "Ташкент",
@@ -475,14 +489,61 @@ const CFG = {
   email:    "info@fitlifegym.uz",
   hours:    "Пн–Пт 06:00–23:00 · Сб–Вс 08:00–22:00",
 };
-// Применяем конфиг
-document.getElementById('cfg-city').textContent    = CFG.city;
-document.getElementById('cfg-tagline').textContent = CFG.tagline;
-document.getElementById('cfg-address').textContent = CFG.address;
-document.getElementById('cfg-phone').textContent   = CFG.phone;
-document.getElementById('cfg-hours').textContent   = CFG.hours;
-document.getElementById('pr-contact').textContent  = CFG.phone;
-document.title = CFG.name;
+
+let CFG = {...CFG_DEFAULT};
+
+function applyCFG(cfg) {
+  CFG = cfg;
+  // Применяем ко всем элементам страницы
+  const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
+  set('cfg-city',    cfg.city);
+  set('cfg-tagline', cfg.tagline);
+  set('cfg-address', cfg.address);
+  set('cfg-phone',   cfg.phone);
+  set('cfg-hours',   cfg.hours);
+  set('pr-contact',  cfg.phone);
+  document.title = cfg.name;
+  // Обновляем hero-заголовок
+  const h1 = document.querySelector('.hero h1');
+  if(h1) {
+    // Разбиваем название на две части для красивого отображения
+    const parts = cfg.name.split(' ');
+    if(parts.length >= 2) {
+      const first = parts[0].toUpperCase();
+      const rest  = parts.slice(1).join(' ').toUpperCase();
+      h1.innerHTML = first + '<em>' + rest.split(' ')[0] + '</em><br>' + (rest.split(' ').slice(1).join(' ')||'');
+    } else {
+      h1.innerHTML = cfg.name.toUpperCase();
+    }
+  }
+}
+
+// ── Загружаем конфиг с Java-сервера ────────────────
+async function loadConfig() {
+  try {
+    const resp = await fetch(CONFIG_SERVER_URL, {
+      method: 'GET',
+      headers: {'Accept':'application/json'},
+      signal: AbortSignal.timeout(3000) // таймаут 3 сек
+    });
+    if(resp.ok) {
+      const data = await resp.json();
+      applyCFG({...CFG_DEFAULT, ...data});
+      console.log('✅ Конфиг загружен с сервера:', data.name);
+    } else {
+      throw new Error('HTTP ' + resp.status);
+    }
+  } catch(e) {
+    // Если сервер недоступен — используем запасной конфиг
+    applyCFG(CFG_DEFAULT);
+    console.log('⚠️ Сервер конфига недоступен, используется запасной конфиг');
+  }
+}
+
+// Применяем запасной конфиг сразу (без мерцания)
+applyCFG(CFG_DEFAULT);
+// Затем пробуем загрузить с сервера
+loadConfig();
 
 // ══════════════════════════════════════════════════
 // РАСПИСАНИЕ — синхронизировано с ScheduleService.java
